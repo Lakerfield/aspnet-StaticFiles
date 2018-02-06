@@ -8,8 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.Headers;
 using Microsoft.AspNetCore.Internal;
 using Microsoft.Extensions.FileProviders;
@@ -20,7 +18,6 @@ namespace Microsoft.AspNetCore.StaticFiles
 {
     internal struct StaticFileContext
     {
-        private const int StreamCopyBufferSize = 64 * 1024;
         private readonly HttpContext _context;
         private readonly StaticFileOptions _options;
         private readonly PathString _matchUrl;
@@ -233,7 +230,7 @@ namespace Microsoft.AspNetCore.StaticFiles
                 // the Range header field.
                 if (ifRangeHeader.LastModified.HasValue)
                 {
-                    if (_lastModified !=null && _lastModified > ifRangeHeader.LastModified)
+                    if (_lastModified != null && _lastModified > ifRangeHeader.LastModified)
                     {
                         _isRangeRequest = false;
                     }
@@ -320,21 +317,16 @@ namespace Microsoft.AspNetCore.StaticFiles
         {
             ApplyResponseHeaders(Constants.Status200Ok);
             string physicalPath = _fileInfo.PhysicalPath;
-            var sendFile = _context.Features.Get<IHttpSendFileFeature>();
-            if (sendFile != null && !string.IsNullOrEmpty(physicalPath))
+            if (!string.IsNullOrEmpty(physicalPath))
             {
                 // We don't need to directly cancel this, if the client disconnects it will fail silently.
-                await sendFile.SendFileAsync(physicalPath, 0, _length, CancellationToken.None);
+                await _response.SendFileAsync(physicalPath, 0, _length, CancellationToken.None);
                 return;
             }
 
             try
             {
-                using (var readStream = _fileInfo.CreateReadStream())
-                {
-                    // Larger StreamCopyBufferSize is required because in case of FileStream readStream isn't going to be buffering
-                    await StreamCopyOperation.CopyToAsync(readStream, _response.Body, _length, StreamCopyBufferSize, _context.RequestAborted);
-                }
+                await _response.SendFileAsync(_fileInfo, _context.RequestAborted);
             }
             catch (OperationCanceledException ex)
             {
@@ -366,23 +358,18 @@ namespace Microsoft.AspNetCore.StaticFiles
             ApplyResponseHeaders(Constants.Status206PartialContent);
 
             string physicalPath = _fileInfo.PhysicalPath;
-            var sendFile = _context.Features.Get<IHttpSendFileFeature>();
-            if (sendFile != null && !string.IsNullOrEmpty(physicalPath))
+            if (!string.IsNullOrEmpty(physicalPath))
             {
                 _logger.LogSendingFileRange(_response.Headers[HeaderNames.ContentRange], physicalPath);
                 // We don't need to directly cancel this, if the client disconnects it will fail silently.
-                await sendFile.SendFileAsync(physicalPath, start, length, CancellationToken.None);
+                await _response.SendFileAsync(physicalPath, start, length, CancellationToken.None);
                 return;
             }
 
             try
             {
-                using (var readStream = _fileInfo.CreateReadStream())
-                {
-                    readStream.Seek(start, SeekOrigin.Begin); // TODO: What if !CanSeek?
-                    _logger.LogCopyingFileRange(_response.Headers[HeaderNames.ContentRange], SubPath);
-                    await StreamCopyOperation.CopyToAsync(readStream, _response.Body, length, _context.RequestAborted);
-                }
+                _logger.LogCopyingFileRange(_response.Headers[HeaderNames.ContentRange], SubPath);
+                await _response.SendFileAsync(_fileInfo, start, length, _context.RequestAborted);
             }
             catch (OperationCanceledException ex)
             {
