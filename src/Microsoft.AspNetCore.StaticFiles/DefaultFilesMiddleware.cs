@@ -23,6 +23,7 @@ namespace Microsoft.AspNetCore.StaticFiles
         private readonly PathString _matchUrl;
         private readonly RequestDelegate _next;
         private readonly IFileProvider _fileProvider;
+        private readonly Func<HttpContext, IFileProvider> _fileProviderProvider;
 
         /// <summary>
         /// Creates a new instance of the DefaultFilesMiddleware.
@@ -50,6 +51,7 @@ namespace Microsoft.AspNetCore.StaticFiles
             _next = next;
             _options = options.Value;
             _fileProvider = _options.FileProvider ?? Helpers.ResolveFileProvider(hostingEnv);
+            _fileProviderProvider = _options.FileProviderProvider;
             _matchUrl = _options.RequestPath;
         }
 
@@ -65,14 +67,15 @@ namespace Microsoft.AspNetCore.StaticFiles
             if (Helpers.IsGetOrHeadMethod(context.Request.Method)
                 && Helpers.TryMatchPath(context, _matchUrl, forDirectory: true, subpath: out var subpath))
             {
-                var dirContents = _fileProvider.GetDirectoryContents(subpath.Value);
+                var fileProvider = _fileProviderProvider?.Invoke(context) ?? _fileProvider;
+                var dirContents = fileProvider.GetDirectoryContents(subpath.Value);
                 if (dirContents.Exists)
                 {
                     // Check if any of our default files exist.
                     for (int matchIndex = 0; matchIndex < _options.DefaultFileNames.Count; matchIndex++)
                     {
                         string defaultFile = _options.DefaultFileNames[matchIndex];
-                        var file = _fileProvider.GetFileInfo(subpath + defaultFile);
+                        var file = fileProvider.GetFileInfo(subpath + defaultFile);
                         // TryMatchPath will make sure subpath always ends with a "/" by adding it if needed.
                         if (file.Exists)
                         {

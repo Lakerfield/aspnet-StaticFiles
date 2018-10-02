@@ -24,6 +24,7 @@ namespace Microsoft.AspNetCore.StaticFiles
         private readonly RequestDelegate _next;
         private readonly ILogger _logger;
         private readonly IFileProvider _fileProvider;
+        private readonly Func<HttpContext, IFileProvider> _fileProviderProvider;
         private readonly IContentTypeProvider _contentTypeProvider;
 
         /// <summary>
@@ -59,6 +60,7 @@ namespace Microsoft.AspNetCore.StaticFiles
             _options = options.Value;
             _contentTypeProvider = options.Value.ContentTypeProvider ?? new FileExtensionContentTypeProvider();
             _fileProvider = _options.FileProvider ?? Helpers.ResolveFileProvider(hostingEnv);
+            _fileProviderProvider = _options.FileProviderProvider;
             _matchUrl = _options.RequestPath;
             _logger = loggerFactory.CreateLogger<StaticFileMiddleware>();
         }
@@ -70,7 +72,8 @@ namespace Microsoft.AspNetCore.StaticFiles
         /// <returns></returns>
         public async Task Invoke(HttpContext context)
         {
-            var fileContext = new StaticFileContext(context, _options, _matchUrl, _logger, _fileProvider, _contentTypeProvider);
+            var fileProvider = _fileProviderProvider?.Invoke(context) ?? _fileProvider;
+            var fileContext = new StaticFileContext(context, _options, _matchUrl, _logger, fileProvider, _contentTypeProvider);
 
             if (!fileContext.ValidateMethod())
             {

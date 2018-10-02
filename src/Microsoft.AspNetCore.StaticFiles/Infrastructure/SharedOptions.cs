@@ -42,5 +42,11 @@ namespace Microsoft.AspNetCore.StaticFiles.Infrastructure
         /// The file system used to locate resources
         /// </summary>
         public IFileProvider FileProvider { get; set; }
+
+        /// <summary>
+        /// The provider for the file system used to locate resources
+        /// </summary>
+        public Func<HttpContext, IFileProvider> FileProviderProvider { get; set; }
+
     }
 }

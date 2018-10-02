@@ -48,5 +48,14 @@ namespace Microsoft.AspNetCore.StaticFiles.Infrastructure
             get { return SharedOptions.FileProvider; }
             set { SharedOptions.FileProvider = value; }
         }
+
+        /// <summary>
+        /// The provider for the file system used to locate resources
+        /// </summary>
+        public Func<HttpContext, IFileProvider> FileProviderProvider
+        {
+          get { return SharedOptions.FileProviderProvider; }
+          set { SharedOptions.FileProviderProvider = value; }
+        }
     }
 }

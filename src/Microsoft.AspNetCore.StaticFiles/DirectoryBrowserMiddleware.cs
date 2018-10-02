@@ -23,6 +23,7 @@ namespace Microsoft.AspNetCore.StaticFiles
         private readonly RequestDelegate _next;
         private readonly IDirectoryFormatter _formatter;
         private readonly IFileProvider _fileProvider;
+        private readonly Func<HttpContext, IFileProvider> _fileProviderProvider;
 
         /// <summary>
         /// Creates a new instance of the SendFileMiddleware. Using <see cref="HtmlEncoder.Default"/> instance.
@@ -67,6 +68,7 @@ namespace Microsoft.AspNetCore.StaticFiles
             _next = next;
             _options = options.Value;
             _fileProvider = _options.FileProvider ?? Helpers.ResolveFileProvider(hostingEnv);
+            _fileProviderProvider = _options.FileProviderProvider;
             _formatter = options.Value.Formatter ?? new HtmlDirectoryFormatter(encoder);
             _matchUrl = _options.RequestPath;
         }
@@ -81,7 +83,7 @@ namespace Microsoft.AspNetCore.StaticFiles
             // Check if the URL matches any expected paths
             if (Helpers.IsGetOrHeadMethod(context.Request.Method)
                 && Helpers.TryMatchPath(context, _matchUrl, forDirectory: true, subpath: out var subpath)
-                && TryGetDirectoryInfo(subpath, out var contents))
+                && TryGetDirectoryInfo(context, subpath, out var contents))
             {
                 // If the path matches a directory but does not end in a slash, redirect to add the slash.
                 // This prevents relative links from breaking.
@@ -98,9 +100,9 @@ namespace Microsoft.AspNetCore.StaticFiles
             return _next(context);
         }
 
-        private bool TryGetDirectoryInfo(PathString subpath, out IDirectoryContents contents)
+        private bool TryGetDirectoryInfo(HttpContext context, PathString subpath, out IDirectoryContents contents)
         {
-            contents = _fileProvider.GetDirectoryContents(subpath.Value);
+            contents = (_fileProviderProvider?.Invoke(context) ?? _fileProvider).GetDirectoryContents(subpath.Value);
             return contents.Exists;
         }
     }
